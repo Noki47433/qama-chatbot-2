@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hotel Qama AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --qama-gold: #ffb300;
+        --qama-gold-200: #ffecb3;
+        --qama-offwhite: #faf9f6;
+        --qama-text: #2b2b2b;
+        --shadow-deep: 0 20px 40px rgba(0,0,0,0.18);
+        --shadow-soft: 0 8px 20px rgba(0,0,0,0.12);
+        --radius: 18px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: "Poppins", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: var(--qama-offwhite);
+        color: var(--qama-text);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Intro toast */
+      .qama-toast {
+        position: fixed;
+        left: 50%;
+        top: 18px;
+        transform: translateX(-50%);
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: var(--shadow-soft);
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .4s ease, transform .4s ease;
+        border: 1px solid rgba(0,0,0,0.06);
+      }
+      .qama-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+      .qama-toast.hide { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+      .qama-toast-emoji { font-size: 18px; }
+      .qama-toast-text { font-weight: 500; font-size: 14px; }
+
+      /* Floating button */
+      .qama-fab {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ffb300 0%, #ffa000 45%, #ffcc33 100%);
+        box-shadow: 0 12px 24px rgba(255, 179, 0, 0.35), 0 4px 10px rgba(0,0,0,0.12);
+        display: grid;
+        place-items: center;
+        color: #2b2b2b;
+        cursor: pointer;
+        border: none;
+        transition: transform .2s ease, box-shadow .2s ease;
+        z-index: 9998;
+      }
+      .qama-fab:hover { transform: translateY(-2px); box-shadow: 0 16px 28px rgba(255,179,0,0.45), 0 6px 14px rgba(0,0,0,0.16); }
+      .qama-fab:active { transform: translateY(0); }
+      .qama-fab svg { width: 28px; height: 28px; }
+
+      /* Chat container */
+      .qama-chat {
+        position: fixed;
+        right: 20px;
+        bottom: 96px; /* leaves room for fab */
+        width: 380px;
+        max-width: 95vw;
+        height: 540px;
+        max-height: 80vh;
+        display: none;
+        flex-direction: column;
+        border-radius: var(--radius);
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(16px) saturate(120%);
+        -webkit-backdrop-filter: blur(16px) saturate(120%);
+        border: 1px solid rgba(255,255,255,0.5);
+        box-shadow: var(--shadow-deep);
+        overflow: hidden;
+        z-index: 9997;
+      }
+      .qama-chat.open { display: flex; animation: qamaFadeIn .25s ease; }
+      @keyframes qamaFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+      .qama-chat__header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        background: rgba(255,255,255,0.55);
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        cursor: move; /* draggable handle */
+      }
+      .qama-header-left { display: flex; align-items: center; gap: 10px; }
+      .qama-logo {
+        width: 32px; height: 32px; border-radius: 8px; object-fit: cover; background: #fff; border: 1px solid rgba(0,0,0,0.06);
+      }
+      .qama-title { font-size: 16px; font-weight: 600; }
+      .qama-header-right { display: flex; align-items: center; gap: 8px; }
+      .qama-lang { display: inline-flex; gap: 6px; }
+      .qama-flag { font-size: 18px; cursor: pointer; padding: 3px 6px; border-radius: 8px; transition: background .2s ease, box-shadow .2s ease; }
+      .qama-flag:hover { background: rgba(0,0,0,0.06); }
+      .qama-flag.active { box-shadow: inset 0 0 0 2px var(--qama-gold); }
+
+      .qama-chat__body {
+        flex: 1;
+        padding: 14px 14px 6px 14px;
+        overflow-y: auto;
+        background: linear-gradient(0deg, rgba(255,255,255,0.65), rgba(255,255,255,0.65)), radial-gradient(1200px 600px at 100% 100%, rgba(255, 179, 0, 0.08), rgba(255,179,0,0));
+      }
+      .qama-chat__body::-webkit-scrollbar { width: 8px; }
+      .qama-chat__body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 8px; }
+
+      .qama-msg {
+        display: inline-block;
+        max-width: 82%;
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-size: 14px;
+        line-height: 1.45;
+        margin: 6px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        animation: msgFade .25s ease;
+      }
+      @keyframes msgFade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+      .qama-row { display: flex; }
+      .qama-row.bot { justify-content: flex-start; }
+      .qama-row.user { justify-content: flex-end; }
+      .qama-msg.bot { background: #f1f1f1; color: #2b2b2b; border-top-left-radius: 6px; }
+      .qama-msg.user { background: var(--qama-gold-200); color: #2b2b2b; border-top-right-radius: 6px; }
+
+      .qama-typing { color: #666; font-size: 12px; display: inline-flex; align-items: center; gap: 8px; }
+      .qama-typing .dots { display: inline-flex; gap: 3px; }
+      .qama-typing .dot { width: 6px; height: 6px; background: #bbb; border-radius: 50%; animation: bounce 1s infinite; }
+      .qama-typing .dot:nth-child(2) { animation-delay: .2s; }
+      .qama-typing .dot:nth-child(3) { animation-delay: .4s; }
+      @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .5;} 40% { transform: translateY(-4px); opacity: 1; } }
+
+      .qama-chat__input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+        background: rgba(255,255,255,0.65);
+        border-top: 1px solid rgba(0,0,0,0.06);
+      }
+      .qama-input {
+        flex: 1;
+        border: 1px solid rgba(0,0,0,0.08);
+        background: #fff;
+        padding: 12px 12px;
+        border-radius: 12px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color .2s ease, box-shadow .2s ease;
+      }
+      .qama-input:focus { border-color: var(--qama-gold); box-shadow: 0 0 0 3px rgba(255,179,0,0.15); }
+      .qama-send {
+        border: none;
+        border-radius: 12px;
+        padding: 10px 14px;
+        background: linear-gradient(135deg, #ffb300, #ffcc33);
+        color: #2b2b2b;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 8px 16px rgba(255,179,0,0.25);
+        transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      }
+      .qama-send:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(255,179,0,0.32); filter: brightness(1.02); }
+      .qama-send:active { transform: translateY(0); }
+
+      /* Mobile tweaks */
+      @media (max-width: 768px) {
+        .qama-chat {
+          right: 50%;
+          transform: translateX(50%);
+          bottom: 86px;
+          width: 95vw;
+          height: 430px; /* 400-450px window */
+          max-height: 70vh;
+        }
+        .qama-chat__header { cursor: default; }
+      }
+
+      /* Page demo background (optional subtle luxury vibe) */
+      .qama-bg {
+        position: fixed; inset: 0;
+        background: radial-gradient(1200px 600px at -10% -10%, rgba(255,179,0,0.08), rgba(0,0,0,0)),
+                    radial-gradient(1000px 500px at 110% 110%, rgba(0,0,0,0.04), rgba(0,0,0,0));
+        pointer-events: none;
+      }
+
+      /* Simple heading for demo page context */
+      .qama-hero {
+        display: grid;
+        place-items: center;
+        min-height: 60vh;
+        padding: 40px 16px 140px;
+        text-align: center;
+      }
+      .qama-hero h1 { font-size: 36px; margin: 0 0 10px; font-weight: 600; }
+      .qama-hero p { margin: 0; opacity: .8; }
+    </style>
+  </head>
+  <body>
+    <div class="qama-bg"></div>
+
+    <div class="qama-hero">
+      <h1>Hotel Qama — AI Assistant Demo</h1>
+      <p>Click the gold button to chat with Qama Assistant.</p>
+    </div>
+
+    <!-- Intro Toast -->
+    <div class="qama-toast" id="qamaToast" role="status" aria-live="polite">
+      <div class="qama-toast-emoji">✨</div>
+      <div class="qama-toast-text">Try our new AI Chatbot for 24/7 help with rooms, reservations and more!</div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="qama-fab" id="qamaFab" aria-label="Open chat">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 5v-5H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="#2b2b2b" stroke-width="1.5" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="8" cy="10" r="1.5" fill="#2b2b2b"/>
+        <circle cx="12" cy="10" r="1.5" fill="#2b2b2b"/>
+        <circle cx="16" cy="10" r="1.5" fill="#2b2b2b"/>
+      </svg>
+    </button>
+
+    <!-- Chat Window -->
+    <section class="qama-chat" id="qamaChat" aria-label="Qama Assistant chat" role="dialog" aria-modal="false">
+      <header class="qama-chat__header" id="qamaHeader">
+        <div class="qama-header-left">
+          <img src="hotel qama.png" alt="Hotel Qama" class="qama-logo" onerror="this.style.visibility='hidden'" />
+          <div class="qama-title">Qama Assistant</div>
+        </div>
+        <div class="qama-header-right">
+          <div class="qama-lang" id="qamaLang">
+            <span class="qama-flag" data-lang="en" title="English">🇬🇧</span>
+            <span class="qama-flag" data-lang="sq" title="Shqip">🇦🇱</span>
+            <span class="qama-flag" data-lang="tr" title="Türkçe">🇹🇷</span>
+            <span class="qama-flag" data-lang="de" title="Deutsch">🇩🇪</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="qama-chat__body" id="qamaBody" aria-live="polite"></div>
+
+      <div class="qama-chat__input">
+        <input class="qama-input" id="qamaInput" type="text" placeholder="Type a message…" autocomplete="off" />
+        <button class="qama-send" id="qamaSend">Send</button>
+      </div>
+    </section>
+
+    <script>
+      (function(){
+        const el = {
+          toast: document.getElementById('qamaToast'),
+          fab: document.getElementById('qamaFab'),
+          chat: document.getElementById('qamaChat'),
+          header: document.getElementById('qamaHeader'),
+          body: document.getElementById('qamaBody'),
+          input: document.getElementById('qamaInput'),
+          send: document.getElementById('qamaSend'),
+          langBar: document.getElementById('qamaLang'),
+        };
+
+        // State
+        let currentLang = 'en';
+        let dragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        // Toast behavior
+        window.addEventListener('DOMContentLoaded', () => {
+          requestAnimationFrame(() => {
+            el.toast.classList.add('show');
+            setTimeout(() => {
+              el.toast.classList.add('hide');
+              setTimeout(() => el.toast.remove(), 400);
+            }, 4600);
+          });
+        });
+
+        // Toggle chat
+        el.fab.addEventListener('click', () => {
+          const opening = !el.chat.classList.contains('open');
+          el.chat.classList.toggle('open');
+          if (opening && el.body.childElementCount === 0) {
+            // Initial welcome
+            setLanguage('en', { highlight: true });
+            botGreet();
+          }
+          if (opening) {
+            setTimeout(() => el.input.focus(), 150);
+          }
+        });
+
+        // Language interactions
+        el.langBar.addEventListener('click', (e) => {
+          const flag = e.target.closest('.qama-flag');
+          if (!flag) return;
+          setLanguage(flag.dataset.lang, { highlight: true, announce: true });
+        });
+
+        function setLanguage(lang, opts={}){
+          currentLang = lang;
+          for (const node of el.langBar.querySelectorAll('.qama-flag')) {
+            node.classList.toggle('active', node.dataset.lang === lang);
+          }
+          if (opts.announce) {
+            const msg = {
+              en: 'Language set to English.',
+              sq: 'Gjuha u vendos në Shqip.',
+              tr: 'Dil Türkçe olarak ayarlandı.',
+              de: 'Sprache auf Deutsch eingestellt.'
+            }[lang] || 'Language updated.';
+            addMessage('bot', msg);
+          }
+        }
+
+        function botGreet(){
+          const greet = {
+            en: 'Welcome to Hotel Qama! I\'m your AI assistant. How can I help you with rooms, reservations, or amenities today?',
+            sq: 'Mirë se erdhët në Hotel Qama! Jam asistenti juaj AI. Si mund t\'ju ndihmoj me dhomat, rezervimet apo shërbimet sot?',
+            tr: 'Hotel Qama\'ya hoş geldiniz! Ben yapay zeka asistanınızım. Bugün odalar, rezervasyonlar veya imkanlarla nasıl yardımcı olabilirim?',
+            de: 'Willkommen im Hotel Qama! Ich bin Ihr KI‑Assistent. Wobei kann ich Ihnen heute helfen – Zimmer, Reservierungen oder Ausstattung?'
+          }[currentLang];
+          addMessage('bot', greet);
+        }
+
+        // Input handlers
+        el.send.addEventListener('click', handleSend);
+        el.input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+          }
+        });
+
+        function handleSend(){
+          const text = el.input.value.trim();
+          if (!text) return;
+          addMessage('user', text);
+          el.input.value = '';
+          const detected = detectLanguage(text) || currentLang;
+          // If detected language differs, switch for this reply only
+          const replyLang = detected;
+          showTyping();
+          setTimeout(() => {
+            hideTyping();
+            const reply = generateReply(replyLang, text);
+            addMessage('bot', reply);
+          }, 800 + Math.min(1400, Math.max(200, text.length * 20)));
+        }
+
+        function addMessage(author, text){
+          const row = document.createElement('div');
+          row.className = `qama-row ${author}`;
+          const bubble = document.createElement('div');
+          bubble.className = `qama-msg ${author}`;
+          bubble.textContent = text;
+          row.appendChild(bubble);
+          el.body.appendChild(row);
+          smoothScrollToBottom();
+        }
+
+        let typingRow = null;
+        function showTyping(){
+          if (typingRow) return;
+          typingRow = document.createElement('div');
+          typingRow.className = 'qama-row bot';
+          const bubble = document.createElement('div');
+          bubble.className = 'qama-msg bot';
+          const wrap = document.createElement('div');
+          wrap.className = 'qama-typing';
+          const label = document.createElement('span');
+          label.textContent = 'Qama Assistant is typing...';
+          const dots = document.createElement('span');
+          dots.className = 'dots';
+          dots.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+          wrap.appendChild(label);
+          wrap.appendChild(dots);
+          bubble.appendChild(wrap);
+          typingRow.appendChild(bubble);
+          el.body.appendChild(typingRow);
+          smoothScrollToBottom();
+        }
+        function hideTyping(){
+          if (typingRow && typingRow.parentNode) typingRow.parentNode.removeChild(typingRow);
+          typingRow = null;
+        }
+
+        function smoothScrollToBottom(){
+          el.body.scrollTo({ top: el.body.scrollHeight, behavior: 'smooth' });
+        }
+
+        // Dragging behavior (desktop)
+        el.header.addEventListener('mousedown', (e) => {
+          if (window.matchMedia('(max-width: 768px)').matches) return; // disable on mobile
+          dragging = true;
+          const rect = el.chat.getBoundingClientRect();
+          dragOffset.x = e.clientX - rect.left;
+          dragOffset.y = e.clientY - rect.top;
+          // Switch to top/left positioning
+          el.chat.style.right = 'auto';
+          el.chat.style.bottom = 'auto';
+          document.body.style.userSelect = 'none';
+        });
+        window.addEventListener('mousemove', (e) => {
+          if (!dragging) return;
+          const left = e.clientX - dragOffset.x;
+          const top = e.clientY - dragOffset.y;
+          el.chat.style.left = Math.max(8, Math.min(window.innerWidth - el.chat.offsetWidth - 8, left)) + 'px';
+          el.chat.style.top = Math.max(8, Math.min(window.innerHeight - 80, top)) + 'px';
+        });
+        window.addEventListener('mouseup', () => {
+          if (!dragging) return;
+          dragging = false;
+          document.body.style.userSelect = '';
+        });
+
+        // Language detection (simple heuristics)
+        function detectLanguage(text){
+          const t = (text || '').toLowerCase();
+          // Quick hits
+          const has = (w) => t.includes(w);
+          // Turkish markers
+          if (/[ığüşöç]/.test(t) || ['merhaba','oda','rezervasyon','fiyat','çıkış','giriş','wifi','wi-fi','otel','restoran','kahvaltı'].some(has)) return 'tr';
+          // German markers
+          if (['zimmer','preis','preise','buchung','check-in','check out','frühstück','wlan','restaurant','kontakt','ankunft','abreise'].some(has)) return 'de';
+          // Albanian markers
+          if (/[ëç]/.test(t) || ['pershendetje','përshëndetje','dhom','rezervim','cmim','çmim','wifi','wi-fi','restorant','check-in','check out','internet','kontakt'].some(has)) return 'sq';
+          // English markers
+          if (['room','price','reservation','check-in','check out','breakfast','restaurant','wifi','contact','hello','hi'].some(has)) return 'en';
+          return null;
+        }
+
+        // Reply generation
+        function generateReply(lang, text){
+          const t = text.toLowerCase();
+          const topic = classifyTopic(t);
+          const R = replies[lang] || replies.en;
+          switch(topic){
+            case 'rooms': return R.rooms;
+            case 'prices': return R.prices;
+            case 'restaurant': return R.restaurant;
+            case 'checkin': return R.checkin;
+            case 'wifi': return R.wifi;
+            case 'contact': return R.contact;
+            default: return R.default;
+          }
+        }
+
+        function classifyTopic(t){
+          const has = (w) => t.includes(w);
+          if (['room','rooms','zimmer','dhom','oda'].some(has)) return 'rooms';
+          if (['price','prices','preis','preise','çmim','cmim','fiyat'].some(has)) return 'prices';
+          if (['restaurant','restorant','restoran','breakfast','frühstück','kahvaltı'].some(has)) return 'restaurant';
+          if (['check-in','check in','check-out','check out','arrival','departure','ankunft','abreise','giriş','çıkış','hyrje','dalje'].some(has)) return 'checkin';
+          if (['wifi','wi-fi','internet','wlan'].some(has)) return 'wifi';
+          if (['contact','phone','email','kontakt','iletisim','iletişim'].some(has)) return 'contact';
+          return 'other';
+        }
+
+        const replies = {
+          en: {
+            rooms: 'Our rooms range from cozy Deluxe to spacious Suites. All include premium bedding, rainfall showers, and city views. Would you like availability for specific dates?',
+            prices: 'Typical rates: Deluxe from €129, Executive from €169, Suites from €239 per night. Prices vary by season and availability.',
+            restaurant: 'Qama Bistro serves modern Mediterranean cuisine. Breakfast 7:00–10:30, Lunch 12:00–15:00, Dinner 18:00–22:30. Room service is 24/7.',
+            checkin: 'Check‑in is from 14:00 and check‑out until 12:00. Early/late options are available upon request.',
+            wifi: 'Complimentary high‑speed Wi‑Fi is available throughout the hotel. Ask if you need a meeting bandwidth boost.',
+            contact: 'You can reach us at +355 4 123 4567 or hello@hotelqama.com. We’re happy to help with any request.',
+            default: 'I can help with rooms, prices, restaurant, check‑in/out, Wi‑Fi, or contact details. What would you like to know?'
+          },
+          sq: {
+            rooms: 'Dhomat tona variojnë nga Deluxe komode deri te Suitat e gjera. Të gjitha përfshijnë shtroja premium, dushe “rainfall” dhe pamje nga qyteti. Doni disponueshmërinë për data të caktuara?',
+            prices: 'Çmimet tipike: Deluxe nga €129, Executive nga €169, Suita nga €239 për natë. Çmimet ndryshojnë sipas sezonit dhe disponueshmërisë.',
+            restaurant: 'Qama Bistro shërben kuzhinë moderne Mesdhetare. Mëngjesi 7:00–10:30, Dreka 12:00–15:00, Darka 18:00–22:30. Shërbimi në dhomë 24/7.',
+            checkin: 'Check‑in nga ora 14:00 dhe check‑out deri në 12:00. Mundësi të hershme/vonuese sipas kërkesës.',
+            wifi: 'Wi‑Fi i shpejtë falas ofrohet në gjithë hotelin. Njoftoni nëse ju duhet kapacitet shtesë për takime.',
+            contact: 'Na kontaktoni në +355 4 123 4567 ose hello@hotelqama.com. Jemi të lumtur të ndihmojmë.',
+            default: 'Mund të ndihmoj me dhoma, çmime, restorant, check‑in/out, Wi‑Fi ose kontakt. Çfarë dëshironi të dini?'
+          },
+          tr: {
+            rooms: 'Odalarımız konforlu Deluxe\'tan ferah Süitlere kadar uzanır. Tümünde premium yatak, yağmur duşu ve şehir manzarası bulunur. Belirli tarihler için müsaitlik ister misiniz?',
+            prices: 'Tipik fiyatlar: Deluxe gecelik €129, Executive €169, Süitler €239. Fiyatlar sezona ve müsaitliğe göre değişir.',
+            restaurant: 'Qama Bistro modern Akdeniz mutfağı sunar. Kahvaltı 7:00–10:30, Öğle 12:00–15:00, Akşam 18:00–22:30. Oda servisi 24/7.',
+            checkin: 'Giriş 14:00\'ten itibaren, çıkış 12:00\'ye kadardır. Erken/geç seçenekleri talep üzerine mümkündür.',
+            wifi: 'Tüm otelde ücretsiz yüksek hızlı Wi‑Fi mevcuttur. Toplantılar için ek bant genişliği talep edebilirsiniz.',
+            contact: 'Bize +355 4 123 4567 numarasından veya hello@hotelqama.com adresinden ulaşabilirsiniz.',
+            default: 'Odalar, fiyatlar, restoran, giriş/çıkış, Wi‑Fi veya iletişim bilgileri hakkında yardımcı olabilirim. Ne öğrenmek istersiniz?'
+          },
+          de: {
+            rooms: 'Unsere Zimmer reichen von gemütlichen Deluxe‑Zimmern bis zu geräumigen Suiten. Alle bieten Premium‑Bettwäsche, Regendusche und Stadtblick. Möchten Sie Verfügbarkeit für bestimmte Daten?',
+            prices: 'Typische Preise: Deluxe ab 129 €, Executive ab 169 €, Suiten ab 239 € pro Nacht. Preise variieren je nach Saison und Verfügbarkeit.',
+            restaurant: 'Das Qama Bistro serviert moderne mediterrane Küche. Frühstück 7:00–10:30, Mittag 12:00–15:00, Abendessen 18:00–22:30. Zimmerservice 24/7.',
+            checkin: 'Check‑in ab 14:00 Uhr, Check‑out bis 12:00 Uhr. Früh-/Spätoptionen auf Anfrage.',
+            wifi: 'Kostenloses High‑Speed‑WLAN ist im gesamten Hotel verfügbar. Für Meetings stellen wir gern mehr Bandbreite bereit.',
+            contact: 'Sie erreichen uns unter +355 4 123 4567 oder hello@hotelqama.com. Wir helfen Ihnen gern weiter.',
+            default: 'Ich helfe bei Zimmern, Preisen, Restaurant, Check‑in/out, WLAN oder Kontaktdaten. Wobei benötigen Sie Infos?'
+          }
+        };
+
+      })();
+    </script>
+  </body>
+</html>
